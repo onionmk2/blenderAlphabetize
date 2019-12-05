@@ -1,3 +1,13 @@
+"""
+Author: Philip Leclerc
+
+However, the primary work was done by Blender Stack Exchange users:
+
+Moog, Robin Betts, batFINGER, aliasguru
+
+This add-on packages their work into a user-friendly button for forcing collections & objects to be alphabetized.
+"""
+
 import bpy
 
 def main():
