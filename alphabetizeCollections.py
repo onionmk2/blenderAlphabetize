@@ -5,6 +5,10 @@ However, the primary work was done by Blender Stack Exchange users:
 
 Moog, Robin Betts, batFINGER, aliasguru
 
+See their original conversation at:
+
+https://blender.stackexchange.com/questions/157562/sorting-collections-alphabetically-in-the-outliner/159897#159897
+
 This add-on packages their work into a user-friendly button for forcing collections & objects to be alphabetized.
 """
 
