@@ -11,6 +11,7 @@ bl_info = {
 }
 
 import bpy
+allCollectionsVisibility = {}
 
 def getLayerCollection(layerCollection, collectionName):
     """
@@ -24,7 +25,21 @@ def getLayerCollection(layerCollection, collectionName):
         if found:
             return found
 
-def sort_collection(collection, case = False):
+def getAllCollectionsVisibility(masterCollection):
+    """
+        Helper function to collect collection hide-visibility values before beginning unlinking/linking. Important because
+        unlinking/linking collections alters their child collections' Hide in Viewport hide-visibility values.
+    """
+    def getChildCollectionsVisibility(collection):
+        if collection.children is None: return
+        for child in collection.children:
+            childLayerCollection = getLayerCollection(bpy.context.view_layer.layer_collection, child.name)
+            bpy.context.view_layer.active_layer_collection = childLayerCollection
+            allCollectionsVisibility[child.name] = bpy.context.view_layer.active_layer_collection.hide_viewport
+            getChildCollectionsVisibility(child)
+    getChildCollectionsVisibility(masterCollection)
+
+def sortCollection(collection, case = False):
     """
         Recursively sorts collections & objects alphabetically: https://blender.stackexchange.com/a/159897/73773
 
@@ -39,43 +54,50 @@ def sort_collection(collection, case = False):
         key = lambda c: c.name if case else c.name.lower()
         )
     for child in children:
-        print("Alphabetizing child " + child.name)
-        objViewportVisibility_before, objRenderVisibility_before = {}, {}
-        if type(child) is bpy.types.Collection: # Use view layer to access local/'temporary' hide_viewport
-            childLayerCollection = getLayerCollection(bpy.context.view_layer.layer_collection, child.name)
-            bpy.context.view_layer.active_layer_collection = childLayerCollection
-            viewportVisibility_before = bpy.context.view_layer.active_layer_collection.hide_viewport
-            renderVisibility_before = bpy.context.view_layer.active_layer_collection.collection.hide_render
-            for obj in child.objects: # Use hide_get()/hide_set(bool) to access local/'temporary' hide_viewport
-                objViewportVisibility_before[obj.name] = obj.hide_get()
-                objRenderVisibility_before[obj.name] = obj.hide_render
-        else:
-            print("WARNING: Found child of type " + str(type(child)) + ". Doing nothing to it.")
+        print(f" -- Alphabetizing child {child.name} -- ")
+        objRenderVisibility_before = {}
+        childLayerCollection = getLayerCollection(bpy.context.view_layer.layer_collection, child.name)
+        bpy.context.view_layer.active_layer_collection = childLayerCollection
+        viewportVisibility_before = allCollectionsVisibility[child.name]
+        renderVisibility_before = bpy.context.view_layer.active_layer_collection.collection.hide_render
+        for obj in child.objects:
+            objRenderVisibility_before[obj.name] = obj.hide_render
 
         collection.children.unlink(child)
         collection.children.link(child)
 
         if type(child) is bpy.types.Collection: # Use view layer to access local/'temporary' hide_viewport
-            childLayerCollection = getLayerCollection(bpy.context.view_layer.layer_collection, child.name) # Necessary to do twice?
+            childLayerCollection = getLayerCollection(bpy.context.view_layer.layer_collection, child.name)
             bpy.context.view_layer.active_layer_collection = childLayerCollection
-            print("Setting coll child " + child.name + " hide-visibility to " + str(viewportVisibility_before))
+            print(f"Setting collection {child.name} hide-visibility to {viewportVisibility_before}")
             bpy.context.view_layer.active_layer_collection.hide_viewport = viewportVisibility_before
             bpy.context.view_layer.active_layer_collection.collection.hide_render = renderVisibility_before
-            for obj in child.objects: # Use hide_get()/hide_set(bool) to access local/'temporary' hide_viewport
-                print("Setting obj " + obj.name + " hide-visibility to " + str(objViewportVisibility_before[obj.name]))
-                obj.hide_set(objViewportVisibility_before[obj.name])
+            for obj in child.objects:
                 obj.hide_render = objRenderVisibility_before[obj.name]
-        else:
-            print("WARNING: Found child of type " + str(type(child)) + ". Doing nothing to it.")
 
-        sort_collection(child)
+        sortCollection(child)
 
 # Main alphabetize function
 def main():
+    objViewportVisibility_before = {}
+
     # case_sensitive sort, (default is False)
     case_sensitive = True
+
     for scene in bpy.data.scenes:
-        sort_collection(scene.collection, case_sensitive)
+        print(f"\n\n ------- Alphabetizing scene {scene.name} ------")
+        print(f"\n --- Retrieving hide-visibility data for collections, objects in scene... ---")
+        getAllCollectionsVisibility(scene.collection)
+        for obj in scene.collection.all_objects:
+            objViewportVisibility_before[obj.name] = obj.hide_get()
+        print(f"\n --- Linking/unlinking collections in scene to alphabetize, w/ reset visibility... ---")
+        sortCollection(scene.collection, case_sensitive)
+
+    print(f"\n\n --- Re-setting objects to original hide-visibility settings... ---")
+    for scene in bpy.data.scenes:
+        for obj in scene.collection.all_objects: # Use hide_get()/hide_set(bool) to access local/'temporary' hide_viewport
+            print(f"Setting obj {obj.name} hide-visibility to {objViewportVisibility_before[obj.name]}")
+            obj.hide_set(objViewportVisibility_before[obj.name])
 
 class AlphabetizeOperator(bpy.types.Operator):
     """Tooltip"""
